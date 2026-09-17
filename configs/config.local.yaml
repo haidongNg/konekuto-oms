@@ -1,0 +1,13 @@
+server:
+  port: "127.0.0.1:8080"
+  timeout: 5 # Thời gian timeout cho các context (giây)
+
+database:
+  driver: "sqlite"
+  # Bật chế độ WAL và busy_timeout để SQLite hỗ trợ xử lý đồng thời (Concurrency) tốt nhất
+  # dsn: "konekuto.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
+  dsn: "file:D:/Projects/konekuto-oms/.db/konekuto.db?_journal=WAL"
+
+security:
+  jwt_secret: "konekuto_super_secret_key_2026"
+  jwt_expire_hours: 72 # Thời gian sống của token (giờ)
