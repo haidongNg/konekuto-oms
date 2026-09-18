@@ -13,6 +13,9 @@ import (
 
 	"github.com/haidongNg/konekuto-oms/internal/config"
 	"github.com/haidongNg/konekuto-oms/internal/domain"
+	productDelivery "github.com/haidongNg/konekuto-oms/internal/product/delivery/http"
+	productRepo "github.com/haidongNg/konekuto-oms/internal/product/repository"
+	productUseCase "github.com/haidongNg/konekuto-oms/internal/product/usecase"
 	userDelivery "github.com/haidongNg/konekuto-oms/internal/user/delivery/http"
 	userRepo "github.com/haidongNg/konekuto-oms/internal/user/repository"
 	userUseCase "github.com/haidongNg/konekuto-oms/internal/user/usecase"
@@ -123,6 +126,16 @@ func (s *echoServer) mapHandlers() {
 	uHandler.RegisterRoutes(s.echo, jwtSecret)
 	// KÍCH HOẠT JOB DỌN RÁC NGẦM
 	s.startCleanupTask(uUseCase)
+
+	// =========================================
+	// 2. Lắp ráp Module Sản Phẩm (MỚI THÊM)
+	// =========================================
+	pRepo := productRepo.NewSQLiteProductRepository(s.db)
+	pUseCase := productUseCase.NewProductUseCase(pRepo, timeoutContext)
+	pHandler := productDelivery.NewProductHandler(pUseCase)
+
+	// Truyền uUseCase vào làm checker để kiểm tra Blacklist cho các API Admin
+	pHandler.RegisterRoutes(s.echo, jwtSecret, uUseCase)
 }
 
 // startCleanupTask là một Background Job chạy ngầm để dọn dẹp database

@@ -25,3 +25,17 @@ CREATE TABLE IF NOT EXISTS blacklisted_tokens (
     jti TEXT PRIMARY KEY,
     expires_at DATETIME NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS products (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    price REAL NOT NULL,
+    stock_quantity INTEGER NOT NULL DEFAULT 0,
+    category TEXT,
+    image_url TEXT,
+    status TEXT DEFAULT 'active', -- active, inactive, out_of_stock
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    deleted_at DATETIME DEFAULT NULL
+);

@@ -1,0 +1,49 @@
+# ========================
+# BẢO MẬT & CẤU HÌNH LỖI
+# ========================
+# KHÔNG BAO GIỜ đẩy file chứa Secret Key lên Git
+.env
+configs/config.local.yaml
+configs/*.local.yaml
+
+# ========================
+# DATABASE (SQLITE)
+# ========================
+# Bỏ qua file database cục bộ và các file tạm của SQLite (WAL mode)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+konekuto.db
+
+# ========================
+# FILE THỰC THI & BUILD
+# ========================
+# Bỏ qua các file binary do Go build ra
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+api
+api.exe
+
+# ========================
+# IDE & HỆ ĐIỀU HÀNH
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ========================
+# LOG & TEMP
+# ========================
+*.log
+tmp/
+temp/
