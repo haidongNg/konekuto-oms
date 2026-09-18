@@ -33,8 +33,13 @@ type UserLoginReq struct {
 }
 
 type UserLoginRes struct {
-	AccessToken string `json:"access_token"`
-	User        *User  `json:"user"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	User         *User  `json:"user"`
+}
+
+type RefreshTokenReq struct {
+	RefreshToken string `json:"refresh_token" validate:"required"`
 }
 
 // =======================================
@@ -45,10 +50,23 @@ type UserLoginRes struct {
 type UserRepository interface {
 	Create(ctx context.Context, user *User) error
 	GetByEmail(ctx context.Context, email string) (*User, error)
+
+	CreateRefreshToken(ctx context.Context, userID, token string, expiresAt time.Time) error
+	GetUserIDByRefreshToken(ctx context.Context, token string) (string, error)
+	DeleteRefreshToken(ctx context.Context, token string) error
+
+	BlacklistToken(ctx context.Context, jti string, expiresAt time.Time) error
+	IsTokenBlacklisted(ctx context.Context, jti string) (bool, error)
+
+	CleanupExpiredTokens(ctx context.Context, now time.Time) (int64, int64, error)
 }
 
 // UserUseCase định nghĩa logic nghiệp vụ (Core Logic)
 type UserUseCase interface {
 	Register(ctx context.Context, req *UserRegisterReq) (*User, error)
 	Login(ctx context.Context, req *UserLoginReq) (*UserLoginRes, error)
+	RefreshToken(ctx context.Context, req *RefreshTokenReq) (*UserLoginRes, error)
+	Logout(ctx context.Context, jti string, refreshToken string, expiresAt time.Time) error
+	CheckBlacklist(ctx context.Context, jti string) error
+	CleanupExpiredTokens(ctx context.Context) error
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/labstack/echo/v5/middleware"
 
 	"github.com/haidongNg/konekuto-oms/internal/config"
+	"github.com/haidongNg/konekuto-oms/internal/domain"
 	userDelivery "github.com/haidongNg/konekuto-oms/internal/user/delivery/http"
 	userRepo "github.com/haidongNg/konekuto-oms/internal/user/repository"
 	userUseCase "github.com/haidongNg/konekuto-oms/internal/user/usecase"
@@ -64,6 +65,7 @@ func (s *echoServer) Run() error {
 		Addr:    s.cfg.Server.Port,
 		Handler: s.echo, // Sử dụng nguyên lý net/http chuẩn
 	}
+
 	slog.Info("🚀 Server khởi động", "port", s.cfg.Server.Port)
 	return s.httpServer.ListenAndServe()
 }
@@ -79,7 +81,7 @@ func (s *echoServer) mapMiddlewares() {
 	s.echo.Use(middleware.Recover())
 	s.echo.Use(middleware.RequestID())
 	s.echo.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"*"},
+		AllowOrigins: []string{"https://127.0.0.1:8080", "https://localhost:8080", "http://localhost:8080"},
 		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization, echo.HeaderXRequestID},
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch},
 	}))
@@ -119,4 +121,19 @@ func (s *echoServer) mapHandlers() {
 	uHandler := userDelivery.NewUserHandler(uUseCase)
 
 	uHandler.RegisterRoutes(s.echo, jwtSecret)
+	// KÍCH HOẠT JOB DỌN RÁC NGẦM
+	s.startCleanupTask(uUseCase)
+}
+
+// startCleanupTask là một Background Job chạy ngầm để dọn dẹp database
+func (s *echoServer) startCleanupTask(uUseCase domain.UserUseCase) {
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			// Gọi thẳng xuống Tầng UseCase, Server không cần biết DB chạy lệnh gì
+			_ = uUseCase.CleanupExpiredTokens(context.Background())
+		}
+	}()
 }
