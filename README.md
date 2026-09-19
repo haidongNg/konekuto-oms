@@ -30,6 +30,132 @@ Hệ thống quản lý đơn hàng backend cho mô hình nông sản tự trồ
 
 ---
 
+## 📊 Sơ đồ Nghiệp vụ (PlantUML Business Workflows)
+
+### 1. Luồng Đặt Hàng & Xử Lý Giao Dịch (Order Checkout Flow)
+Sơ đồ minh họa luồng xử lý Transaction khép kín qua các tầng Clean Architecture, bảo vệ tính toàn vẹn dữ liệu và cơ chế **Atomic Update** ngăn chặn bán vượt sản lượng.
+
+```plantuml
+@startuml
+autonumber
+skinparam style strictuml
+skinparam SequenceMessageAlignment center
+
+actor "Khách hàng\n(Customer)" as Client
+participant "Echo Router\n& Middlewares" as Middleware
+participant "Order Handler\n(Delivery Layer)" as Handler
+participant "Order UseCase\n(Domain Logic)" as UseCase
+participant "Product Repo" as ProductRepo
+database "SQLite DB\n(WAL Mode)" as DB
+
+Client -> Middleware: POST /api/v1/orders (Kèm JWT & Body)
+activate Middleware
+Middleware -> Middleware: Validate JWT & Check Blacklist
+alt Token không hợp lệ / Đã bị thu hồi
+    Middleware --> Client: 401 Unauthorized
+end
+Middleware -> Handler: Chuyển tiếp Request đã xác thực
+deactivate Middleware
+
+activate Handler
+Handler -> Handler: Validate DTO (OrderType, DeliveryDate, Items)
+Handler -> UseCase: CreateOrder(ctx, userID, req)
+activate UseCase
+
+loop Duyệt qua từng nông sản trong giỏ
+    UseCase -> ProductRepo: GetByID(product_id)
+    activate ProductRepo
+    ProductRepo -> DB: SELECT * FROM products WHERE id = ?
+    DB --> ProductRepo: Trả về thông tin sản phẩm
+    ProductRepo --> UseCase: Product Entity
+    deactivate ProductRepo
+
+    alt Sản phẩm 'out_of_season' hoặc không tồn tại
+        UseCase --> Handler: Lỗi (Hết mùa vụ / Không tìm thấy)
+        Handler --> Client: 400 Bad Request
+    end
+    alt Số lượng đặt > stock_quantity
+        UseCase --> Handler: Lỗi (Không đủ sản lượng vườn)
+        Handler --> Client: 400 Bad Request
+    end
+    UseCase -> UseCase: Tính SubTotal = Price * Quantity
+end
+
+UseCase -> UseCase: Bắt đầu Transaction (BeginTxx)
+UseCase -> DB: INSERT INTO orders (...)
+loop Lưu từng OrderItem và Trừ Tồn Kho
+    UseCase -> DB: INSERT INTO order_items (...)
+    UseCase -> DB: UPDATE products SET stock_quantity = stock_quantity - :qty\nWHERE id = :id AND stock_quantity >= :qty
+    alt RowsAffected == 0 (Kho bị âm hoặc có race condition)
+        UseCase -> DB: ROLLBACK Transaction
+        UseCase --> Handler: Lỗi (Hết hàng tại thời điểm chốt)
+        Handler --> Client: 400 Bad Request
+    end
+end
+UseCase -> DB: COMMIT Transaction
+UseCase --> Handler: Order Entity hoàn tất
+deactivate UseCase
+
+Handler --> Client: 201 Created (Kèm chi tiết đơn hàng)
+deactivate Handler
+@enduml
+```
+
+---
+
+### 2. Chu Trình Gom Đơn & Thu Hoạch (Farm-to-Table Lifecycle)
+Sơ đồ hoạt động thể hiện vòng đời gom đơn theo ngày giao (`delivery_date`), phân loại hình thức nhận hàng (`pickup` / `delivery`) và quy trình thu hoạch tươi sống.
+
+```plantuml
+@startuml
+start
+
+:Khách hàng chọn nông sản theo quy cách (mớ, kg, túi, con);
+:Khách chọn Ngày nhận (delivery_date) và Hình thức (order_type);
+
+if (Hình thức nhận hàng?) then (Giao tận nơi - delivery)
+  :Nhập địa chỉ giao (shipping_address);
+else (Lấy tại vườn - pickup)
+  :Bỏ qua địa chỉ, lấy tọa độ vườn;
+endif
+
+:Khách bấm Đặt hàng;
+
+partition "Hệ thống Backend" {
+  if (Sản phẩm còn trong mùa và đủ sản lượng?) then (Có)
+    :Tạo đơn hàng trạng thái 'pending';
+    :Trừ sản lượng tồn kho (Atomic Lock);
+  else (Không)
+    :Báo lỗi và hủy đơn (Rollback);
+    stop
+  endif
+}
+
+partition "Vận hành Nông Trại (Admin OMS)" {
+  :Chủ vườn lọc danh sách đơn theo 'delivery_date';
+  :Hệ thống tổng hợp sản lượng cần thu hoạch (vd: 30 mớ rau, 10 con cá);
+  :Chủ vườn đổi trạng thái đơn sang 'confirmed';
+  
+  :Tiến hành thu hoạch sáng sớm tại vườn;
+  :Sơ chế và đóng gói theo từng mã đơn hàng;
+  
+  if (order_type == 'pickup') then (Lấy tại vườn)
+    :Chủ vườn đổi trạng thái sang 'ready';
+    :Khách đến vườn nhận hàng;
+  else (Giao tận nơi)
+    :Chủ vườn đổi trạng thái sang 'shipping';
+    :Đơn vị vận chuyển giao tận tay khách;
+  endif
+  
+  :Đơn hàng hoàn tất -> Trạng thái 'completed';
+}
+
+stop
+@enduml
+```
+
+---
+
 ## 🏗 Kiến trúc Hệ thống (Clean Architecture Flow)
 
 Dự án được chia thành các Layer (Tầng) độc lập. Các tầng giao tiếp với nhau **hoàn toàn thông qua Interfaces**, giúp mã nguồn dễ dàng viết Unit Test và dễ dàng thay đổi công nghệ (VD: Đổi SQLite sang PostgreSQL mà không cần sửa Core Logic).
