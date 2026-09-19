@@ -1,17 +1,32 @@
-# Konekuto OMS (Order Management System) 🚀
+# Konekuto OMS (Farm-to-Table Order Management System) 🥦🐟
 
-Hệ thống quản lý đơn hàng (E-commerce) backend được xây dựng với các tiêu chuẩn khắt khe nhất dành cho môi trường Production, tuân thủ tuyệt đối **Clean Architecture** và nguyên lý **SOLID** (100% Dependency Inversion qua Interfaces).
+Hệ thống quản lý đơn hàng backend cho mô hình nông sản tự trồng ("Từ vườn đến bàn ăn"), xây dựng bằng **Golang** theo chuẩn **Clean Architecture** và nguyên lý **SOLID** (100% Dependency Inversion qua Interfaces).
 
-## 🛠 Tech Stack (Công nghệ sử dụng)
+## 🛠 Tech Stack
 - **Ngôn ngữ:** Golang 1.27
-- **Web Framework:** Echo v5 (Hiệu năng cao, routing tối ưu)
-- **Database:** SQLite (WAL mode) + `sqlx` (Giao tiếp DB an toàn, chống SQL Injection)
+- **Web Framework:** Echo v5
+- **Database:** SQLite (WAL mode) + `sqlx`
 - **Security:** 
-  - JWT (JSON Web Token) cho Authentication (Access & Refresh Token).
-  - RBAC (Role-Based Access Control) cho Phân quyền (Admin/Customer).
-  - Bcrypt băm mật khẩu.
-  - Blacklist Token (Thu hồi token khi Logout).
+  - JWT Authentication (Access Token 15 phút & Refresh Token 7 ngày lưu DB).
+  - RBAC (Role-Based Access Control) phân quyền `admin` / `customer`.
+  - Token Blacklist thu hồi token khi logout kèm Background Worker dọn rác định kỳ.
 - **Validation:** `go-playground/validator/v10`
+
+---
+
+## 🌾 Đặc thù Nghiệp vụ Nông sản (Farm-to-Table Domain)
+
+- **Đơn vị tính linh hoạt (`unit`):** Bán theo quy cách cố định (`mớ`, `kg`, `túi 500g`, `con`) để đảm bảo số lượng (`quantity`) luôn là số nguyên, tránh sai số dấu phẩy động.
+- **Quản lý vụ mùa (`status`):** Phân biệt trạng thái `active` (đang thu hoạch) và `out_of_season` (hết mùa/chờ lứa mới).
+- **Gom đơn theo đợt (`delivery_date`):** Hỗ trợ chọn ngày giao để chủ vườn tổng hợp sản lượng và thu hoạch tươi trong ngày.
+- **Hình thức nhận hàng (`order_type`):**
+  - `pickup`: Nhận trực tiếp tại vườn (không bắt buộc địa chỉ giao).
+  - `delivery`: Giao tận nơi (bắt buộc `shipping_address`).
+- **Chống bán lố (Zero Overselling):** Sử dụng câu lệnh Atomic Update trực tiếp trong Database Transaction:
+  ```sql
+  UPDATE products 
+  SET stock_quantity = stock_quantity - :quantity 
+  WHERE id = :product_id AND stock_quantity >= :quantity AND deleted_at IS NULL
 
 ---
 

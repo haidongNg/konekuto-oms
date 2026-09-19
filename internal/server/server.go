@@ -13,6 +13,9 @@ import (
 
 	"github.com/haidongNg/konekuto-oms/internal/config"
 	"github.com/haidongNg/konekuto-oms/internal/domain"
+	orderDelivery "github.com/haidongNg/konekuto-oms/internal/order/delivery/http"
+	orderRepo "github.com/haidongNg/konekuto-oms/internal/order/repository"
+	orderUseCase "github.com/haidongNg/konekuto-oms/internal/order/usecase"
 	productDelivery "github.com/haidongNg/konekuto-oms/internal/product/delivery/http"
 	productRepo "github.com/haidongNg/konekuto-oms/internal/product/repository"
 	productUseCase "github.com/haidongNg/konekuto-oms/internal/product/usecase"
@@ -136,6 +139,17 @@ func (s *echoServer) mapHandlers() {
 
 	// Truyền uUseCase vào làm checker để kiểm tra Blacklist cho các API Admin
 	pHandler.RegisterRoutes(s.echo, jwtSecret, uUseCase)
+
+	// =========================================
+	// 3. Lắp ráp Module Đơn Hàng (Order)
+	// =========================================
+	oRepo := orderRepo.NewSQLiteOrderRepository(s.db)
+
+	// CHÚ Ý: Tiêm cả oRepo (lưu Order) và pRepo (để UseCase dò giá Sản phẩm)
+	oUseCase := orderUseCase.NewOrderUseCase(oRepo, pRepo, timeoutContext)
+
+	oHandler := orderDelivery.NewOrderHandler(oUseCase)
+	oHandler.RegisterRoutes(s.echo, jwtSecret, uUseCase)
 }
 
 // startCleanupTask là một Background Job chạy ngầm để dọn dẹp database

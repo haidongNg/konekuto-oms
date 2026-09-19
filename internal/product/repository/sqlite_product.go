@@ -14,15 +14,14 @@ type sqliteProductRepository struct {
 	db *sqlx.DB
 }
 
-// Factory Pattern trả về Interface ProductRepository
 func NewSQLiteProductRepository(db *sqlx.DB) domain.ProductRepository {
 	return &sqliteProductRepository{db: db}
 }
 
 func (r *sqliteProductRepository) Create(ctx context.Context, p *domain.Product) error {
 	query := `
-		INSERT INTO products (id, name, description, price, stock_quantity, category, image_url, status, created_at, updated_at)
-		VALUES (:id, :name, :description, :price, :stock_quantity, :category, :image_url, :status, :created_at, :updated_at)
+		INSERT INTO products (id, name, description, price, unit, stock_quantity, category, image_url, status, created_at, updated_at)
+		VALUES (:id, :name, :description, :price, :unit, :stock_quantity, :category, :image_url, :status, :created_at, :updated_at)
 	`
 	_, err := r.db.NamedExecContext(ctx, query, p)
 	return err
@@ -30,13 +29,12 @@ func (r *sqliteProductRepository) Create(ctx context.Context, p *domain.Product)
 
 func (r *sqliteProductRepository) GetByID(ctx context.Context, id string) (*domain.Product, error) {
 	var product domain.Product
-	// Chú ý: Chỉ lấy các sản phẩm chưa bị xóa mềm (deleted_at IS NULL)
 	query := `SELECT * FROM products WHERE id = ? AND deleted_at IS NULL`
 
 	err := r.db.GetContext(ctx, &product, query, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil // Không ném lỗi panic, chỉ trả về nil báo hiệu không tìm thấy
+			return nil, nil
 		}
 		return nil, err
 	}
@@ -55,7 +53,6 @@ func (r *sqliteProductRepository) List(ctx context.Context, limit, offset int) (
 	if err != nil {
 		return nil, err
 	}
-	// Khởi tạo mảng rỗng thay vì nil nếu không có data (chuẩn API JSON)
 	if products == nil {
 		products = []domain.Product{}
 	}
@@ -65,7 +62,7 @@ func (r *sqliteProductRepository) List(ctx context.Context, limit, offset int) (
 func (r *sqliteProductRepository) Update(ctx context.Context, p *domain.Product) error {
 	query := `
 		UPDATE products 
-		SET name = :name, description = :description, price = :price, 
+		SET name = :name, description = :description, price = :price, unit = :unit,
 		    stock_quantity = :stock_quantity, category = :category, 
 		    image_url = :image_url, status = :status, updated_at = :updated_at
 		WHERE id = :id AND deleted_at IS NULL
@@ -75,7 +72,6 @@ func (r *sqliteProductRepository) Update(ctx context.Context, p *domain.Product)
 }
 
 func (r *sqliteProductRepository) Delete(ctx context.Context, id string, deletedAt time.Time) error {
-	// Xóa mềm: Không dùng câu lệnh DELETE, mà UPDATE trường deleted_at
 	query := `UPDATE products SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL`
 	res, err := r.db.ExecContext(ctx, query, deletedAt, id)
 	if err != nil {
