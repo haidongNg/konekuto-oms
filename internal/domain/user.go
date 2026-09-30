@@ -7,17 +7,17 @@ import (
 
 // User là Entity ánh xạ trực tiếp với Database
 type User struct {
-	ID           string     `json:"id" db:"id"`
-	Email        string     `json:"email" db:"email"`
-	PasswordHash string     `json:"-" db:"password_hash"`
-	FullName     string     `json:"full_name" db:"full_name"`
-	PhoneNumber  string     `json:"phone_number" db:"phone_number"`
-	AvatarURL    string     `json:"avatar_url" db:"avatar_url"`
-	Role         string     `json:"role" db:"role"`
-	Status       string     `json:"status" db:"status"`
-	CreatedAt    time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at" db:"updated_at"`
-	DeletedAt    *time.Time `json:"-" db:"deleted_at"`
+	ID          string     `json:"id" db:"id"`
+	Email       string     `json:"email" db:"email"`
+	Password    string     `json:"-" db:"password"`
+	FullName    string     `json:"full_name" db:"full_name"`
+	PhoneNumber string     `json:"phone_number" db:"phone_number"`
+	AvatarURL   string     `json:"avatar_url" db:"avatar_url"`
+	Role        string     `json:"role" db:"role"`
+	Status      string     `json:"status" db:"status"`
+	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at" db:"updated_at"`
+	DeletedAt   *time.Time `json:"-" db:"deleted_at"`
 }
 
 type UserRegisterReq struct {

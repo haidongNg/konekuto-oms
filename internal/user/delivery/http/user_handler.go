@@ -3,16 +3,16 @@ package http
 import (
 	"net/http"
 
+	jwtware "github.com/gofiber/contrib/v3/jwt"
+	"github.com/gofiber/fiber/v3"
 	"github.com/haidongNg/konekuto-oms/internal/domain"
 	"github.com/haidongNg/konekuto-oms/pkg/middlewares"
 	"github.com/haidongNg/konekuto-oms/pkg/response"
-	echojwt "github.com/labstack/echo-jwt/v5"
-	"github.com/labstack/echo/v5"
 )
 
 // UserHandler định nghĩa giao thức cho HTTP Delivery
 type UserHandler interface {
-	RegisterRoutes(e *echo.Echo, jwtSecret string)
+	RegisterRoutes(app *fiber.App, jwtSecret string)
 }
 
 // userHandlerImpl là bản thực thi (Private)
@@ -27,20 +27,20 @@ func NewUserHandler(us domain.UserUseCase) UserHandler {
 	}
 }
 
-// RegisterRoutes gắn các API endpoint vào Echo Router
-func (h *userHandlerImpl) RegisterRoutes(e *echo.Echo, jwtSecret string) {
+// RegisterRoutes gắn các API endpoint vào Fiber Router
+func (h *userHandlerImpl) RegisterRoutes(app *fiber.App, jwtSecret string) {
 	// ==========================================
 	// 1. API PUBLIC (Không cần Token)
 	// ==========================================
-	publicGroup := e.Group("/api/v1/users")
-	publicGroup.POST("/register", h.register)
-	publicGroup.POST("/login", h.login)
-	publicGroup.POST("/refresh-token", h.refreshToken) // Cấp lại token mới bằng Refresh Token
+	publicGroup := app.Group("/api/v1/users")
+	publicGroup.Post("/register", h.register)
+	publicGroup.Post("/login", h.login)
+	publicGroup.Post("/refresh-token", h.refreshToken) // Cấp lại token mới bằng Refresh Token
 
-	// Cấu hình Middleware phân giải JWT mặc định
-	jwtConfig := echojwt.Config{
-		SigningKey: []byte(jwtSecret),
-		ErrorHandler: func(c *echo.Context, err error) error {
+	// Cấu hình Middleware phân giải JWT cho Fiber v3
+	jwtConfig := jwtware.Config{
+		SigningKey: jwtware.SigningKey{Key: []byte(jwtSecret)},
+		ErrorHandler: func(c fiber.Ctx, err error) error {
 			return response.Error(c, http.StatusUnauthorized, "Token không hợp lệ hoặc đã hết hạn")
 		},
 	}
@@ -48,86 +48,78 @@ func (h *userHandlerImpl) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	// ==========================================
 	// 2. API PRIVATE (Yêu cầu đăng nhập)
 	// ==========================================
-	// Bảo vệ bằng echojwt VÀ CheckBlacklist (Ngăn dùng token đã bị đăng xuất)
-	protectedGroup := e.Group("/api/v1/users/me",
-		echojwt.WithConfig(jwtConfig),
+	protectedGroup := app.Group("/api/v1/users/me",
+		jwtware.New(jwtConfig),
 		middlewares.CheckBlacklist(h.useCase),
 	)
-	protectedGroup.GET("", h.getProfile)
-	protectedGroup.POST("/logout", h.logout)
+	protectedGroup.Get("", h.getProfile)
+	protectedGroup.Post("/logout", h.logout)
 
 	// ==========================================
 	// 3. API ADMIN (Yêu cầu quyền Quản trị)
 	// ==========================================
-	// adminGroup := e.Group("/api/v1/admin/users",
-	// 	echojwt.WithConfig(jwtConfig),
+	// adminGroup := app.Group("/api/v1/admin/users",
+	// 	jwtware.New(jwtConfig),
 	// 	middlewares.CheckBlacklist(h.useCase),
-	// 	middlewares.RequireRole("admin"), // Chỉ cho phép Role = admin đi qua
+	// 	middlewares.RequireRole("admin"),
 	// )
-	// adminGroup.GET("", h.adminGetUsers)
+	// adminGroup.Get("", h.adminGetUsers)
 }
 
 // --- CÁC HÀM XỬ LÝ (CONTROLLERS) ---
 
-func (h *userHandlerImpl) register(c *echo.Context) error {
+func (h *userHandlerImpl) register(c fiber.Ctx) error {
 	var req domain.UserRegisterReq
-	if err := c.Bind(&req); err != nil {
-		return response.Error(c, http.StatusBadRequest, "Dữ liệu JSON không hợp lệ")
+	if err := c.Bind().Body(&req); err != nil {
+		return response.Error(c, http.StatusBadRequest, "Dữ liệu JSON không hợp lệ hoặc sai định dạng: "+err.Error())
 	}
-	if err := c.Validate(&req); err != nil {
-		return response.Error(c, http.StatusBadRequest, "Sai định dạng dữ liệu: "+err.Error())
-	}
-	user, err := h.useCase.Register(c.Request().Context(), &req)
+
+	user, err := h.useCase.Register(c.Context(), &req)
 	if err != nil {
 		return response.Error(c, http.StatusConflict, err.Error())
 	}
 	return response.Success(c, http.StatusCreated, "Đăng ký thành công", user)
 }
 
-func (h *userHandlerImpl) login(c *echo.Context) error {
+func (h *userHandlerImpl) login(c fiber.Ctx) error {
 	var req domain.UserLoginReq
-	if err := c.Bind(&req); err != nil {
-		return response.Error(c, http.StatusBadRequest, "Dữ liệu JSON không hợp lệ")
+	if err := c.Bind().Body(&req); err != nil {
+		return response.Error(c, http.StatusBadRequest, "Dữ liệu JSON không hợp lệ hoặc sai định dạng: "+err.Error())
 	}
-	if err := c.Validate(&req); err != nil {
-		return response.Error(c, http.StatusBadRequest, "Sai định dạng dữ liệu: "+err.Error())
-	}
-	res, err := h.useCase.Login(c.Request().Context(), &req)
+
+	res, err := h.useCase.Login(c.Context(), &req)
 	if err != nil {
 		return response.Error(c, http.StatusUnauthorized, err.Error())
 	}
 	return response.Success(c, http.StatusOK, "Đăng nhập thành công", res)
 }
 
-func (h *userHandlerImpl) refreshToken(c *echo.Context) error {
+func (h *userHandlerImpl) refreshToken(c fiber.Ctx) error {
 	var req domain.RefreshTokenReq
-	if err := c.Bind(&req); err != nil {
-		return response.Error(c, http.StatusBadRequest, "Dữ liệu JSON không hợp lệ")
-	}
-	if err := c.Validate(&req); err != nil {
-		return response.Error(c, http.StatusBadRequest, "Vui lòng cung cấp refresh_token")
+	if err := c.Bind().Body(&req); err != nil {
+		return response.Error(c, http.StatusBadRequest, "Vui lòng cung cấp refresh_token hợp lệ: "+err.Error())
 	}
 
-	res, err := h.useCase.RefreshToken(c.Request().Context(), &req)
+	res, err := h.useCase.RefreshToken(c.Context(), &req)
 	if err != nil {
 		return response.Error(c, http.StatusUnauthorized, err.Error())
 	}
 	return response.Success(c, http.StatusOK, "Cấp lại token thành công", res)
 }
 
-func (h *userHandlerImpl) logout(c *echo.Context) error {
-	// 1. Lấy JTI (Mã định danh token) và thời gian hết hạn từ Header
+func (h *userHandlerImpl) logout(c fiber.Ctx) error {
+	// 1. Lấy JTI và thời gian hết hạn từ Header thông qua helper
 	_, _, jti, exp, err := middlewares.ExtractUserClaims(c)
 	if err != nil {
 		return response.Error(c, http.StatusUnauthorized, "Token không hợp lệ")
 	}
 
-	// 2. Client gửi kèm Refresh Token dưới dạng Body JSON để hệ thống xóa luôn khỏi DB
+	// 2. Client gửi kèm Refresh Token dưới dạng Body JSON
 	var req domain.RefreshTokenReq
-	_ = c.Bind(&req) // Bỏ qua bắt lỗi nếu client không gửi body
+	_ = c.Bind().Body(&req) // Bỏ qua bắt lỗi nếu client không gửi body
 
 	// 3. Đưa Access Token vào danh sách đen & Xóa Refresh Token
-	err = h.useCase.Logout(c.Request().Context(), jti, req.RefreshToken, exp)
+	err = h.useCase.Logout(c.Context(), jti, req.RefreshToken, exp)
 	if err != nil {
 		return response.Error(c, http.StatusInternalServerError, "Lỗi khi đăng xuất: "+err.Error())
 	}
@@ -135,8 +127,8 @@ func (h *userHandlerImpl) logout(c *echo.Context) error {
 	return response.Success(c, http.StatusOK, "Đăng xuất thành công", nil)
 }
 
-func (h *userHandlerImpl) getProfile(c *echo.Context) error {
-	// Sử dụng hàm tiện ích đã viết ở auth_middleware để lấy dữ liệu gọn gàng
+func (h *userHandlerImpl) getProfile(c fiber.Ctx) error {
+	// Lấy dữ liệu user từ claims thông qua helper
 	userID, role, _, _, err := middlewares.ExtractUserClaims(c)
 	if err != nil {
 		return response.Error(c, http.StatusUnauthorized, err.Error())

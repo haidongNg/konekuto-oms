@@ -1,0 +1,35 @@
+info:
+  name: 01 - Register User
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v1/users/register"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "email": "nongdan@konekuto.vn",
+        "password": "matkhau123",
+        "full_name": "Nguyễn Hải Đông",
+        "phone_number": "0901234567"
+      }
+
+assert:
+  - expr: res.status
+    operator: eq
+    value: "201"
+  - expr: res.body.code
+    operator: eq
+    value: "201"
+
+scripts:
+  postResponse: |-
+    if (res.getStatus() === 201) {
+      const resData = res.getBody().data;
+      bru.setEnvVar("registeredUserId", resData.id);
+    }

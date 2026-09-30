@@ -1,0 +1,36 @@
+info:
+  name: 02 - Login User
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v1/users/login"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "email": "nongdan@konekuto.vn",
+        "password": "matkhau123"
+      }
+
+assert:
+  - expr: res.status
+    operator: eq
+    value: "200"
+  - expr: res.body.code
+    operator: eq
+    value: "200"
+  - expr: res.body.data.access_token
+    operator: isDefined
+
+scripts:
+  postResponse: |-
+    if (res.getStatus() === 200) {
+      const resData = res.getBody().data;
+      bru.setEnvVar("accessToken", resData.access_token);
+      bru.setEnvVar("refreshToken", resData.refresh_token);
+    }

@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS order_status_history (
     note TEXT,                           -- Lý do đổi trạng thái (nếu có)
     created_at DATETIME NOT NULL,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (changed_by) REFERENCES users(id)
 );
 
 -- Quản lý thanh toán và đối soát dòng tiền

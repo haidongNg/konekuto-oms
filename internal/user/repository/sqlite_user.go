@@ -23,15 +23,15 @@ func NewSQLiteUserRepository(db *sqlx.DB) domain.UserRepository {
 
 func (r *sqliteUserRepository) Create(ctx context.Context, u *domain.User) error {
 	query := `
-		INSERT INTO users (id, email, password_hash, full_name, phone_number, avatar_url, role, status, created_at, updated_at) 
-		VALUES (:id, :email, :password_hash, :full_name, :phone_number, :avatar_url, :role, :status, :created_at, :updated_at)`
+		INSERT INTO users (id, email, password, full_name, phone_number, avatar_url, role, status, created_at, updated_at) 
+		VALUES (:id, :email, :password, :full_name, :phone_number, :avatar_url, :role, :status, :created_at, :updated_at)`
 	_, err := r.db.NamedExecContext(ctx, query, u)
 	return err
 }
 
 func (r *sqliteUserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
 	var user domain.User
-	query := `SELECT id, email, password_hash, full_name, role, status FROM users WHERE email = ? AND deleted_at IS NULL`
+	query := `SELECT id, email, password, full_name, role, status FROM users WHERE email = ? AND deleted_at IS NULL`
 	err := r.db.GetContext(ctx, &user, query, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

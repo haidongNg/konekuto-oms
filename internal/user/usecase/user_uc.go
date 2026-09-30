@@ -44,16 +44,16 @@ func (u *userUseCase) Register(c context.Context, req *domain.UserRegisterReq) (
 
 	now := time.Now()
 	newUser := &domain.User{
-		ID:           uuid.New().String(),
-		Email:        req.Email,
-		PasswordHash: string(hashedPassword),
-		FullName:     req.FullName,
-		PhoneNumber:  req.PhoneNumber,
-		AvatarURL:    "",
-		Role:         "customer",
-		Status:       "active",
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:          uuid.New().String(),
+		Email:       req.Email,
+		Password:    string(hashedPassword),
+		FullName:    req.FullName,
+		PhoneNumber: req.PhoneNumber,
+		AvatarURL:   "",
+		Role:        "customer",
+		Status:      "active",
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 
 	if err = u.userRepo.Create(ctx, newUser); err != nil {
@@ -71,7 +71,7 @@ func (u *userUseCase) Login(c context.Context, req *domain.UserLoginReq) (*domai
 		return nil, errors.New("email hoặc mật khẩu không chính xác")
 	}
 
-	if err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+	if err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		return nil, errors.New("email hoặc mật khẩu không chính xác")
 	}
 

@@ -7,9 +7,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/goccy/go-json"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/cors"
+	"github.com/gofiber/fiber/v3/middleware/etag"
+	"github.com/gofiber/fiber/v3/middleware/limiter"
 	"github.com/jmoiron/sqlx"
-	"github.com/labstack/echo/v5"
-	"github.com/labstack/echo/v5/middleware"
 
 	"github.com/haidongNg/konekuto-oms/internal/config"
 	"github.com/haidongNg/konekuto-oms/internal/domain"
@@ -32,9 +35,9 @@ type Server interface {
 	Shutdown(ctx context.Context) error
 }
 
-// echoServer là struct đóng gói
-type echoServer struct {
-	echo       *echo.Echo
+// fiberServer là struct đóng gói
+type fiberServer struct {
+	app        *fiber.App
 	db         *sqlx.DB
 	cfg        *config.Config
 	httpServer *http.Server
@@ -42,82 +45,114 @@ type echoServer struct {
 
 // NewServer khởi tạo và trả về Interface Server
 func NewServer(cfg *config.Config, db *sqlx.DB) Server {
-	e := echo.New()
-	e.Validator = validations.NewValidator()
-	e.HTTPErrorHandler = customHTTPErrorHandler
+	app := fiber.New(
+		fiber.Config{
+			StructValidator: validations.NewValidator(),
+			ErrorHandler:    customHTTPErrorHandler,
+			BodyLimit:       2 * 1024 * 1024, // Giới hạn kích thước body request là 2MB
+			// 1. Dùng bộ phân giải JSON tốc độ cao (Nhanh hơn 3-5 lần chuẩn Go)
+			JSONEncoder: json.Marshal,
+			JSONDecoder: json.Unmarshal,
+			// 3. Tối ưu Header
+			ServerHeader: "Fiber", // Trả về header server gọn nhẹ
+			// 4. Các cấu hình Timeout (Chống tấn công DDoS ngâm kết nối Slowloris)
+			ReadTimeout:  10 * time.Second,
+			WriteTimeout: 10 * time.Second,
+			IdleTimeout:  30 * time.Second,
+		},
+	)
 
-	return &echoServer{
-		echo: e,
-		db:   db,
-		cfg:  cfg,
+	return &fiberServer{
+		app: app,
+		db:  db,
+		cfg: cfg,
 	}
 }
 
-func customHTTPErrorHandler(c *echo.Context, err error) {
+func customHTTPErrorHandler(c fiber.Ctx, err error) error {
 	code := http.StatusInternalServerError
 	message := "Lỗi máy chủ nội bộ"
-	if he, ok := err.(*echo.HTTPError); ok {
+	if he, ok := err.(*fiber.Error); ok {
 		code = he.Code
 		message = fmt.Sprintf("%v", he.Message)
 	}
-	_ = response.Error(c, code, message)
+	return response.Error(c, code, message)
 }
 
-func (s *echoServer) Run() error {
+func (s *fiberServer) Run() error {
 	s.mapMiddlewares()
 	s.mapHandlers()
-
-	s.httpServer = &http.Server{
-		Addr:    s.cfg.Server.Port,
-		Handler: s.echo, // Sử dụng nguyên lý net/http chuẩn
-	}
-
 	slog.Info("🚀 Server khởi động", "port", s.cfg.Server.Port)
-	return s.httpServer.ListenAndServe()
+	// Lưu ý: Fiber sẽ tự động bỏ qua Prefork nếu bạn chạy code trên Windows.
+	return s.app.Listen(s.cfg.Server.Port, fiber.ListenConfig{
+		EnablePrefork:         false, // Bật đa tiến trình để tối đa hoá RPS
+		DisableStartupMessage: false, // Để false để xem logo và log port của Fiber lúc khởi động
+	})
 }
 
-func (s *echoServer) Shutdown(ctx context.Context) error {
-	if s.httpServer != nil {
-		return s.httpServer.Shutdown(ctx)
-	}
-	return nil
+// Shutdown xử lý Graceful Shutdown
+func (s *fiberServer) Shutdown(ctx context.Context) error {
+	slog.Info("Dừng Fiber Server...")
+	// Sử dụng ShutdownWithContext để Fiber tuân thủ thời gian timeout (10s) mà bạn đã set ở main
+	return s.app.ShutdownWithContext(ctx)
 }
 
-func (s *echoServer) mapMiddlewares() {
-	s.echo.Use(middleware.Recover())
-	s.echo.Use(middleware.RequestID())
-	s.echo.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+func (s *fiberServer) mapMiddlewares() {
+	// 3. ETag Middleware
+	s.app.Use(etag.New(etag.Config{
+		Weak: true, // Sử dụng ETag Weak để giảm bớt việc tính toán hash
+	}))
+
+	// 3. CORS middleware
+	s.app.Use(cors.New(cors.Config{
 		AllowOrigins: []string{"https://127.0.0.1:8080", "https://localhost:8080", "http://localhost:8080"},
-		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization, echo.HeaderXRequestID},
+		AllowHeaders: []string{
+			"Origin",
+			fiber.HeaderContentType,
+			"Accept",
+			fiber.HeaderAuthorization,
+			"X-Request-ID",
+		},
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch},
 	}))
-	s.echo.Use(middleware.Secure())
-	s.echo.Use(middleware.BodyLimit(2_097_152)) // Giới hạn kích thước body request là 2MB
-	s.echo.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(20)))
 
-	s.echo.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
-		LogStatus: true, LogURI: true, LogMethod: true, LogLatency: true, HandleError: true, LogHeaders: []string{echo.HeaderXRequestID},
-		LogValuesFunc: func(c *echo.Context, v middleware.RequestLoggerValues) error {
-			reqID := ""
-			if len(v.Headers[echo.HeaderXRequestID]) > 0 {
-				reqID = v.Headers[echo.HeaderXRequestID][0]
-			}
-			logData := []slog.Attr{
-				slog.String("req_id", reqID), slog.String("method", v.Method),
-				slog.String("uri", v.URI), slog.Int("status", v.Status), slog.Duration("latency", v.Latency),
-			}
-			if v.Error == nil {
-				slog.LogAttrs(context.Background(), slog.LevelInfo, "REQUEST", logData...)
-			} else {
-				logData = append(logData, slog.String("err", v.Error.Error()))
-				slog.LogAttrs(context.Background(), slog.LevelError, "REQUEST_ERROR", logData...)
-			}
-			return nil
-		},
+	// 4. Rate Limiter middleware
+	s.app.Use(limiter.New(limiter.Config{
+		Max:        20,
+		Expiration: 1 * time.Minute,
 	}))
+
+	// 5. Request Logger custom với slog
+	s.app.Use(func(c fiber.Ctx) error {
+		start := time.Now()
+
+		reqID := c.Get("X-Request-ID")
+
+		err := c.Next()
+
+		latency := time.Since(start)
+		status := c.Response().StatusCode()
+
+		logData := []slog.Attr{
+			slog.String("req_id", reqID),
+			slog.String("method", c.Method()),
+			slog.String("uri", c.OriginalURL()),
+			slog.Int("status", status),
+			slog.Duration("latency", latency),
+		}
+
+		if err == nil {
+			slog.LogAttrs(context.Background(), slog.LevelInfo, "REQUEST", logData...)
+		} else {
+			logData = append(logData, slog.String("err", err.Error()))
+			slog.LogAttrs(context.Background(), slog.LevelError, "REQUEST_ERROR", logData...)
+		}
+
+		return err
+	})
 }
 
-func (s *echoServer) mapHandlers() {
+func (s *fiberServer) mapHandlers() {
 	timeoutContext := s.cfg.Server.Timeout * time.Second
 	jwtSecret := s.cfg.Security.JWTSecret
 
@@ -126,7 +161,7 @@ func (s *echoServer) mapHandlers() {
 	uUseCase := userUseCase.NewUserUseCase(uRepo, timeoutContext, jwtSecret)
 	uHandler := userDelivery.NewUserHandler(uUseCase)
 
-	uHandler.RegisterRoutes(s.echo, jwtSecret)
+	uHandler.RegisterRoutes(s.app, jwtSecret)
 	// KÍCH HOẠT JOB DỌN RÁC NGẦM
 	s.startCleanupTask(uUseCase)
 
@@ -138,7 +173,7 @@ func (s *echoServer) mapHandlers() {
 	pHandler := productDelivery.NewProductHandler(pUseCase)
 
 	// Truyền uUseCase vào làm checker để kiểm tra Blacklist cho các API Admin
-	pHandler.RegisterRoutes(s.echo, jwtSecret, uUseCase)
+	pHandler.RegisterRoutes(s.app, jwtSecret, uUseCase)
 
 	// =========================================
 	// 3. Lắp ráp Module Đơn Hàng (Order)
@@ -149,11 +184,11 @@ func (s *echoServer) mapHandlers() {
 	oUseCase := orderUseCase.NewOrderUseCase(oRepo, pRepo, timeoutContext)
 
 	oHandler := orderDelivery.NewOrderHandler(oUseCase)
-	oHandler.RegisterRoutes(s.echo, jwtSecret, uUseCase)
+	oHandler.RegisterRoutes(s.app, jwtSecret, uUseCase)
 }
 
 // startCleanupTask là một Background Job chạy ngầm để dọn dẹp database
-func (s *echoServer) startCleanupTask(uUseCase domain.UserUseCase) {
+func (s *fiberServer) startCleanupTask(uUseCase domain.UserUseCase) {
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()

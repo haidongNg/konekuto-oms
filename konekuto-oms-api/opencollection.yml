@@ -1,0 +1,24 @@
+opencollection: 1.0.0
+
+info:
+  name: konekuto-oms-api
+bundled: false
+extensions:
+  bruno:
+    ignore:
+      - node_modules
+      - .git
+name: local
+variables:
+  - name: baseUrl
+    value: http://localhost:8080
+    enabled: true
+  - name: accessToken
+    value: ""
+    enabled: true
+  - name: refreshToken
+    value: ""
+    enabled: true
+  - name: registeredUserId
+    value: ""
+    enabled: true
