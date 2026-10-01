@@ -88,15 +88,19 @@ func (u *userUseCase) RefreshToken(c context.Context, req *domain.RefreshTokenRe
 		return nil, errors.New("refresh token không hợp lệ hoặc đã hết hạn")
 	}
 
-	// 2. Xóa Token cũ để xoay vòng (Token Rotation - Chống Replay Attack)
+	// 2. Xóa Token cũ để xoay vòng
 	_ = u.userRepo.DeleteRefreshToken(ctx, req.RefreshToken)
 
-	// 3. Lấy thông tin User (vì JWT cần Role)
-	// Lưu ý: Cần thêm hàm GetByID vào Repo, tạm thời ta có thể giả định gọi hàm GetByID
-	// Trong thực tế bạn nên viết thêm hàm GetByID trong Repo. Để demo ta dùng dữ liệu cơ bản:
-	user := &domain.User{ID: userID, Role: "customer"} // Fix nhanh
+	// 3. Lấy thông tin User thực tế từ DB để nhận đúng Role
+	user, err := u.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, errors.New("lỗi truy xuất thông tin người dùng")
+	}
+	if user == nil {
+		return nil, errors.New("không tìm thấy người dùng hoặc tài khoản đã bị vô hiệu hóa")
+	}
 
-	// 4. Cấp lại cặp Token mới
+	// 4. Cấp lại cặp Token mới với Role chính xác
 	return u.generateTokens(ctx, user)
 }
 

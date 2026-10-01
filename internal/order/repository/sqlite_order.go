@@ -16,7 +16,7 @@ func NewSQLiteOrderRepository(db *sqlx.DB) domain.OrderRepository {
 	return &sqliteOrderRepository{db: db}
 }
 
-func (r *sqliteOrderRepository) CreateWithItems(ctx context.Context, order *domain.Order, items []domain.OrderItem) error {
+func (r *sqliteOrderRepository) CreateWithItems(ctx context.Context, order *domain.Order, items []domain.OrderItem) (err error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return err

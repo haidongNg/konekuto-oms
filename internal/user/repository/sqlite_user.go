@@ -29,9 +29,24 @@ func (r *sqliteUserRepository) Create(ctx context.Context, u *domain.User) error
 	return err
 }
 
+func (r *sqliteUserRepository) GetByID(ctx context.Context, id string) (*domain.User, error) {
+	var user domain.User
+	// Chỉ lấy các trường cần thiết, bỏ qua những tài khoản đã bị xóa mềm
+	query := `SELECT id, email, password, full_name, role, status FROM users WHERE id = ? AND deleted_at IS NULL`
+
+	err := r.db.GetContext(ctx, &user, query, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil // Không tìm thấy user
+		}
+		return nil, err // Có lỗi truy vấn
+	}
+	return &user, nil
+}
+
 func (r *sqliteUserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
 	var user domain.User
-	query := `SELECT id, email, password, full_name, role, status FROM users WHERE email = ? AND deleted_at IS NULL`
+	query := `SELECT id, email, password, full_name, role, status FROM users WHERE email = ?`
 	err := r.db.GetContext(ctx, &user, query, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

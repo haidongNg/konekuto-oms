@@ -49,6 +49,7 @@ type RefreshTokenReq struct {
 // UserRepository định nghĩa các thao tác với DB
 type UserRepository interface {
 	Create(ctx context.Context, user *User) error
+	GetByID(ctx context.Context, id string) (*User, error)
 	GetByEmail(ctx context.Context, email string) (*User, error)
 
 	CreateRefreshToken(ctx context.Context, userID, token string, expiresAt time.Time) error

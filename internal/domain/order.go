@@ -6,29 +6,31 @@ import (
 )
 
 type Order struct {
-	ID            string    `json:"id" db:"id"`
-	UserID        string    `json:"user_id" db:"user_id"`
-	TotalAmount   float64   `json:"total_amount" db:"total_amount"`
-	Status        string    `json:"status" db:"status"`                     // pending, confirmed, shipping, completed, cancelled
-	OrderType     string    `json:"order_type" db:"order_type"`             // pickup, delivery
-	PaymentMethod string    `json:"payment_method" db:"payment_method"`     // cod, banking, momo
-	ShippingAddr  *string   `json:"shipping_address" db:"shipping_address"` // Cho phép null nếu pickup
-	DeliveryDate  string    `json:"delivery_date" db:"delivery_date"`       // MỚI: Ngày gom đơn giao (VD: "2026-09-25")
-	Note          string    `json:"note" db:"note"`
-	CreatedAt     time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at" db:"updated_at"`
+	ID            string     `json:"id" db:"id"`
+	UserID        string     `json:"user_id" db:"user_id"`
+	TotalAmount   float64    `json:"total_amount" db:"total_amount"`
+	Status        string     `json:"status" db:"status"`                     // pending, confirmed, shipping, completed, cancelled
+	OrderType     string     `json:"order_type" db:"order_type"`             // pickup, delivery
+	PaymentMethod string     `json:"payment_method" db:"payment_method"`     // cod, banking, momo
+	ShippingAddr  *string    `json:"shipping_address" db:"shipping_address"` // Cho phép null nếu pickup
+	DeliveryDate  string     `json:"delivery_date" db:"delivery_date"`       // MỚI: Ngày gom đơn giao (VD: "2026-09-25")
+	Note          string     `json:"note" db:"note"`
+	CreatedAt     time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at" db:"updated_at"`
+	DeletedAt     *time.Time `json:"-" db:"deleted_at"`
 
 	Items []OrderItem `json:"items" db:"-"`
 }
 
 type OrderItem struct {
-	ID        string    `json:"id" db:"id"`
-	OrderID   string    `json:"order_id" db:"order_id"`
-	ProductID string    `json:"product_id" db:"product_id"`
-	Quantity  int       `json:"quantity" db:"quantity"`
-	UnitPrice float64   `json:"unit_price" db:"unit_price"`
-	SubTotal  float64   `json:"sub_total" db:"sub_total"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	ID        string     `json:"id" db:"id"`
+	OrderID   string     `json:"order_id" db:"order_id"`
+	ProductID string     `json:"product_id" db:"product_id"`
+	Quantity  int        `json:"quantity" db:"quantity"`
+	UnitPrice float64    `json:"unit_price" db:"unit_price"`
+	SubTotal  float64    `json:"sub_total" db:"sub_total"`
+	CreatedAt time.Time  `json:"created_at" db:"created_at"`
+	DeletedAt *time.Time `json:"-" db:"deleted_at"`
 }
 
 type OrderCreateReq struct {

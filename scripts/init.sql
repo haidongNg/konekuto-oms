@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS users (
     role TEXT NOT NULL DEFAULT 'customer', -- 'customer' hoặc 'admin'
     status TEXT NOT NULL DEFAULT 'active',   -- 'active' hoặc 'inactive'
     created_at DATETIME NOT NULL,
-    updated_at DATETIME NOT NULL
+    updated_at DATETIME NOT NULL,
+    deleted_at DATETIME DEFAULT NULL
 );
 
 CREATE TABLE IF NOT EXISTS refresh_tokens (
@@ -63,6 +64,7 @@ CREATE TABLE IF NOT EXISTS orders (
     note TEXT,                           -- Ghi chú của khách (VD: "Làm sạch cá giúp mình")
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
+    deleted_at DATETIME DEFAULT NULL,    -- Đã sửa: Thêm dấu phẩy
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
@@ -74,6 +76,7 @@ CREATE TABLE IF NOT EXISTS order_items (
     unit_price REAL NOT NULL,            -- Lưu giá tại thời điểm chốt đơn
     sub_total REAL NOT NULL,
     created_at DATETIME NOT NULL,
+    deleted_at DATETIME DEFAULT NULL,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
@@ -90,6 +93,7 @@ CREATE TABLE IF NOT EXISTS order_status_history (
     changed_by TEXT NOT NULL,            -- ID của User hoặc Admin thực hiện chuyển trạng thái
     note TEXT,                           -- Lý do đổi trạng thái (nếu có)
     created_at DATETIME NOT NULL,
+    deleted_at DATETIME DEFAULT NULL,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
     FOREIGN KEY (changed_by) REFERENCES users(id)
 );
@@ -104,5 +108,6 @@ CREATE TABLE IF NOT EXISTS payments (
     status TEXT NOT NULL,                -- 'pending', 'success', 'failed', 'refunded'
     paid_at DATETIME,
     created_at DATETIME NOT NULL,
+    deleted_at DATETIME DEFAULT NULL,    -- Đã sửa: Thêm dấu phẩy
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
 );
